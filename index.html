@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Voting Pemilihan Ketua OSIS</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- jsPDF & AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px;}
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .marquee-container { overflow: hidden; white-space: nowrap; }
+        .marquee-content { display: inline-block; animation: marquee 20s linear infinite; }
+        @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+
+        :fullscreen { background-color: white; }
+        :-webkit-full-screen { background-color: white; }
+        :-ms-fullscreen { background-color: white; }
+    </style>
+</head>
+<body class="text-gray-800 antialiased overflow-hidden">
+
+    <div id="loading-overlay" class="hidden fixed inset-0 z-[9999] bg-gray-900 bg-opacity-75 flex flex-col items-center justify-center backdrop-blur-sm">
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mb-4"></div>
+        <p id="loading-text" class="text-white font-semibold text-lg">Memproses data...</p>
+    </div>
+
+    <div id="toast-container" class="fixed top-5 right-5 z-[2000] flex flex-col gap-3 pointer-events-none"></div>
+
+    <div id="modal-overlay" class="hidden fixed inset-0 z-[1000] bg-black bg-opacity-60 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95 transition-transform duration-300" id="modal-content">
+            <div class="p-6 border-b border-gray-100 bg-gray-50">
+                <h3 id="modal-title" class="text-xl font-bold text-gray-800">Konfirmasi</h3>
+            </div>
+            <div class="p-6">
+                <p id="modal-message" class="text-gray-600 text-lg whitespace-pre-line"></p>
+            </div>
+            <div class="p-6 pt-0 flex justify-end gap-3 bg-gray-50 border-t border-gray-100 rounded-b-xl">
+                <button onclick="closeModal()" class="px-5 py-2.5 rounded-lg font-medium text-gray-600 bg-white border border-gray-300 hover:bg-gray-100 transition-colors">Batal</button>
+                <button id="modal-confirm-btn" class="px-5 py-2.5 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-md">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="form-modal-overlay" class="hidden fixed inset-0 z-[1000] bg-black bg-opacity-60 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]" id="form-modal-content">
+            <div class="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
+                <h3 id="form-modal-title" class="text-xl font-bold text-gray-800">Form</h3>
+                <button onclick="closeFormModal()" class="text-gray-400 hover:text-red-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            </div>
+            <div class="p-6 overflow-y-auto" id="form-modal-body"></div>
+        </div>
+    </div>
+
+    <main id="app-root" class="h-screen w-full relative overflow-hidden bg-gray-100">
+
+        <!-- VIEW 1: LANDING PAGE -->
+        <section id="view-landing" class="absolute inset-0 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-blue-50 to-indigo-100 fade-in overflow-y-auto z-10">
+            <div class="text-center mb-10">
+                <div class="w-24 h-24 bg-white text-blue-600 rounded-3xl mx-auto flex items-center justify-center shadow-lg mb-6 dynamic-logo overflow-hidden border-2 border-white">
+                    <svg class="w-12 h-12 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                </div>
+                <h1 class="text-4xl font-extrabold text-gray-900 tracking-tight" id="landing-school-name">Portal E-Voting</h1>
+                <p class="text-gray-600 mt-3 text-lg">Silakan pilih gerbang masuk aplikasi</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl pb-10">
+                <div onclick="switchView('view-admin-login')" class="bg-white rounded-2xl p-8 shadow-xl cursor-pointer hover:-translate-y-2 transition-all duration-300 border-t-4 border-blue-500 group">
+                    <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform"><svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Panel Admin</h2>
+                    <p class="text-gray-500">Pendaftaran pemilih on-the-spot dan manajamen kandidat.</p>
+                </div>
+                <div onclick="switchView('view-voter-login')" class="bg-white rounded-2xl p-8 shadow-xl cursor-pointer hover:-translate-y-2 transition-all duration-300 border-t-4 border-green-500 group">
+                    <div class="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform"><svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Bilik Suara</h2>
+                    <p class="text-gray-500">Masuk menggunakan Token pemilih.</p>
+                </div>
+                <div onclick="switchView('view-dashboard')" class="bg-white rounded-2xl p-8 shadow-xl cursor-pointer hover:-translate-y-2 transition-all duration-300 border-t-4 border-purple-500 group">
+                    <div class="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform"><svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 13v-1m4 1v-3m4 3V8M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg></div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Live Dashboard</h2>
+                    <p class="text-gray-500">Layar proyektor: Visi Misi berputar & Quick Count.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW 2: ADMIN LOGIN -->
+        <section id="view-admin-login" class="hidden absolute inset-0 bg-gray-50 flex items-center justify-center p-4 z-10">
+            <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md fade-in relative">
+                <button onclick="switchView('view-landing')" class="absolute top-4 left-4 text-gray-400 hover:text-gray-700"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg></button>
+                <div class="text-center mb-8 mt-2">
+                    <h2 class="text-2xl font-bold text-gray-900">Login Panitia</h2>
+                </div>
+                <form id="admin-login-form" class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                        <input type="text" id="admin-user" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" placeholder="Masukkan username">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                        <input type="password" id="admin-pass" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow" placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors">Masuk</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- VIEW 3: ADMIN PANEL -->
+        <section id="view-admin-panel" class="hidden absolute inset-0 bg-gray-100 flex h-screen overflow-hidden z-10">
+            <aside class="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm z-10 shrink-0">
+                <div class="p-6 border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-blue-700 flex items-center gap-2">Admin Panel</h2>
+                </div>
+                <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+                    <button onclick="switchAdminTab('tab-kandidat')" id="btn-tab-kandidat" class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg bg-blue-50 text-blue-700 font-medium transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg> Kandidat
+                    </button>
+                    <button onclick="switchAdminTab('tab-pemilih')" id="btn-tab-pemilih" class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg text-gray-600 hover:bg-gray-50 font-medium transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> Pemilih & Antrian
+                    </button>
+                    <button onclick="switchAdminTab('tab-pengaturan')" id="btn-tab-pengaturan" class="w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg text-gray-600 hover:bg-gray-50 font-medium transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg> Pengaturan
+                    </button>
+                </nav>
+                <div class="p-4 border-t border-gray-200">
+                    <button onclick="doLogout()" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-medium transition-colors">Keluar</button>
+                </div>
+            </aside>
+
+            <main class="flex-1 overflow-y-auto p-8 relative">
+                <!-- Tab Kandidat -->
+                <div id="tab-kandidat" class="admin-tab fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-2xl font-bold text-gray-800">Manajemen Kandidat</h3>
+                        <button onclick="openFormTambahKandidat()" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> Tambah Kandidat
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="admin-kandidat-list"></div>
+                </div>
+
+                <!-- Tab Pemilih -->
+                <div id="tab-pemilih" class="admin-tab hidden fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">Pendaftaran Pemilih</h3>
+                            <p class="text-gray-500 text-sm mt-1">Total Terdaftar: <span id="admin-total-voters">0</span></p>
+                        </div>
+                        <div class="flex gap-2 flex-wrap">
+                            <button onclick="openFormTambahPemilih()" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 flex items-center gap-2 text-sm font-medium">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> Tambah Pemilih (On the Spot)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow border border-gray-200 overflow-hidden">
+                        <div class="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                            <input type="text" id="search-voter" placeholder="Cari Nama / Token..." class="px-4 py-2 border rounded-lg w-64 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" onkeyup="filterVoters()">
+                            <button onclick="fetchAdminData()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg flex gap-2 items-center">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Refresh Data
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto max-h-[50vh]">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="sticky top-0 bg-gray-100 z-10 shadow-sm">
+                                    <tr class="text-gray-600 text-sm uppercase tracking-wider">
+                                        <th class="p-4 font-semibold border-b">No</th>
+                                        <th class="p-4 font-semibold border-b">Nama Pemilih</th>
+                                        <th class="p-4 font-semibold border-b text-center">Token</th>
+                                        <th class="p-4 font-semibold border-b text-center">Status</th>
+                                        <th class="p-4 font-semibold border-b text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-voters-tbody" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Pengaturan -->
+                <div id="tab-pengaturan" class="admin-tab hidden fade-in">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-6">Pengaturan Aplikasi</h3>
+                    <div class="bg-white rounded-xl shadow border border-gray-200 p-6 space-y-6 max-w-3xl">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Nama Sekolah / Institusi</label>
+                            <input type="text" id="setting-sekolah" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Upload Logo Sekolah</label>
+                            <input type="file" id="setting-logo-file" accept="image/png, image/jpeg" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50" onchange="handleLogoUpload(this)">
+                            <input type="hidden" id="setting-logo-url">
+                            <p class="text-xs text-gray-500 mt-1">Logo otomatis diterapkan ke Halaman Depan, Login, dan Dashboard.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Target Total Pemilih (Suara Masuk)</label>
+                            <input type="number" id="setting-total-pemilih" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            <p class="text-xs text-gray-500 mt-1">Digunakan untuk menghitung persentase (%) suara masuk secara akurat di Live Dashboard.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Teks Pengumuman (Running Text Dashboard)</label>
+                            <input type="text" id="setting-pengumuman" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <button onclick="saveSettings()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">Simpan Pengaturan</button>
+                        
+                        <hr class="border-gray-200">
+                        
+                        <div>
+                            <h4 class="text-lg font-bold text-gray-800 mb-2">Dokumentasi Akhir</h4>
+                            <p class="text-sm text-gray-600 mb-4">Cetak hasil resmi pemilihan (hanya diakses setelah pemilihan selesai).</p>
+                            <button onclick="exportBeritaAcaraPDF()" class="bg-gray-800 text-white px-6 py-2 rounded-lg font-medium hover:bg-gray-900 transition-colors flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Cetak Berita Acara (PDF)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </section>
+
+        <!-- VIEW 4: VOTER LOGIN (SCANNER) -->
+        <section id="view-voter-login" class="hidden absolute inset-0 bg-[url('https://images.unsplash.com/photo-1544531585-9847b68c8c86?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center flex items-center justify-center z-10">
+            <div class="absolute inset-0 bg-blue-900 bg-opacity-80 backdrop-blur-sm"></div>
+            
+            <button onclick="toggleFullScreen()" class="absolute top-4 right-4 z-20 text-white bg-black bg-opacity-30 hover:bg-opacity-50 p-3 rounded-full transition-all" title="Mode Layar Penuh">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+            </button>
+
+            <div class="relative z-10 w-full max-w-md p-8 bg-white bg-opacity-95 rounded-3xl shadow-2xl backdrop-blur-md fade-in">
+                <button onclick="switchView('view-landing')" class="absolute top-4 left-4 text-gray-400 hover:text-gray-800" title="Kembali ke Menu"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg></button>
+                
+                <div class="text-center mb-8">
+                    <div class="w-20 h-20 bg-gray-50 rounded-full mx-auto flex items-center justify-center shadow-inner mb-4 dynamic-logo overflow-hidden border-2 border-gray-100">
+                        <svg class="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <h2 class="text-3xl font-extrabold text-gray-900">Bilik Suara</h2>
+                    <p class="text-gray-500 mt-2">Ketik Token Pemilih</p>
+                </div>
+
+                <form id="voter-token-form">
+                    <input type="text" id="voter-token-input" maxlength="6" class="w-full px-6 py-4 text-center text-2xl font-bold tracking-[0.5em] rounded-xl border-2 border-gray-300 focus:border-green-500 outline-none uppercase mb-4" placeholder="Ketik Token..." autocomplete="off" autofocus>
+                    <button type="submit" class="w-full bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95 text-lg">Masuk Pemilihan</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- VIEW 5: VOTER CASTING (PILIH KANDIDAT) -->
+        <section id="view-voter-cast" class="hidden absolute inset-0 bg-gray-100 flex flex-col h-screen overflow-hidden z-10">
+            <header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center z-10 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-600 p-2 rounded-lg text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <h1 class="text-xl font-bold text-gray-800" id="cast-sekolah-name">Pemilihan Ketua OSIS</h1>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="bg-blue-50 px-4 py-2 rounded-full border border-blue-100">
+                        <span class="text-sm text-blue-600 font-medium">Pemilih: <span id="active-voter-name" class="font-bold text-blue-800">Siswa</span></span>
+                    </div>
+                    <button onclick="toggleFullScreen()" class="text-gray-500 hover:text-gray-800 bg-gray-100 p-2 rounded-full" title="Mode Layar Penuh">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                    </button>
+                </div>
+            </header>
+            
+            <div class="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col items-center">
+                <h2 class="text-3xl font-extrabold text-gray-800 mb-2 text-center">Pilih Kandidat Anda</h2>
+                <p class="text-gray-500 mb-8 text-center max-w-xl">Pelajari visi misi di bawah ini. Klik tombol "COBLOS". Pilihan tidak dapat diubah setelah konfirmasi.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-6xl pb-10" id="voter-candidates-grid"></div>
+            </div>
+        </section>
+
+        <!-- VIEW 6: LIVE DASHBOARD -->
+        <section id="view-dashboard" class="hidden absolute inset-0 bg-gray-900 text-white flex flex-col h-screen overflow-hidden z-10">
+            <header class="px-8 py-5 border-b border-gray-800 flex justify-between items-center bg-gray-900 z-10 shrink-0">
+                <div class="flex items-center gap-4 cursor-pointer">
+                    <button onclick="switchView('view-landing')" class="bg-purple-600 p-2.5 rounded-xl hover:bg-purple-700 transition" title="Kembali">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    </button>
+                    <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 dynamic-logo">
+                        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-black tracking-wide text-white drop-shadow-md">LIVE QUICK COUNT</h1>
+                        <p class="text-sm text-purple-300 font-semibold uppercase tracking-wider" id="dash-sekolah-name">Memuat Data...</p>
+                    </div>
+                </div>
+                <div class="flex gap-6 items-center">
+                    <div class="text-right mr-4 border-r border-gray-700 pr-6">
+                        <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold">Tingkat Partisipasi</p>
+                        <p class="text-2xl font-bold text-white"><span id="dash-voted" class="text-green-400">0</span> / <span id="dash-total" class="text-gray-400">0</span></p>
+                    </div>
+                    <div class="text-right mr-4">
+                        <p class="text-xs text-gray-400 uppercase tracking-wide font-semibold">Suara Masuk</p>
+                        <p class="text-2xl font-bold text-yellow-400" id="dash-percentage">0%</p>
+                    </div>
+                    <button onclick="toggleFullScreen()" class="bg-gray-800 border border-gray-700 p-3 rounded-full hover:bg-gray-700 transition" title="Mode Layar Penuh">
+                        <svg class="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                    </button>
+                </div>
+            </header>
+
+            <div class="flex-1 flex flex-col lg:flex-row p-6 gap-6 overflow-hidden bg-gray-900">
+                <div class="w-full lg:w-7/12 bg-gray-800 rounded-3xl p-8 flex flex-col shadow-2xl border border-gray-700 relative">
+                    <h2 class="text-xl font-bold text-gray-200 mb-6 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-red-500 animate-pulse"></span> Hasil Perolehan Suara
+                    </h2>
+                    <div class="flex-1 relative w-full h-full min-h-[250px]">
+                        <canvas id="voteChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="w-full lg:w-5/12 bg-gray-800 rounded-3xl relative flex flex-col overflow-hidden shadow-2xl border border-gray-700">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gray-700">
+                        <div id="carousel-progress" class="h-full bg-purple-500 transition-all ease-linear" style="width: 0%"></div>
+                    </div>
+                    <div id="dash-carousel-content" class="w-full h-full flex flex-col p-6 fade-in items-center justify-center text-gray-400">
+                        Menunggu data kandidat...
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 border-t border-gray-700 py-3 px-4 shrink-0 shadow-inner z-20">
+                <div class="marquee-container text-yellow-400 font-bold text-lg tracking-wide flex items-center">
+                    <span class="bg-yellow-500 text-gray-900 px-3 py-1 rounded text-sm mr-4 shrink-0 z-10 font-black">INFO</span>
+                    <div class="marquee-content" id="dash-marquee-text">Memuat Pengumuman...</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        /**
+         * ============================================================
+         * WAJIB DIUBAH!
+         * Ganti URL di bawah dengan URL Web App Apps Script Anda.
+         * ============================================================
+         */
+        const APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrywFTeRBFIQemS1iGUf-YDfKr2lklNnC34WYss0RhXtyeFdRQIQ8OGmo1m1zOYXPZ/exec";
+        
+        let APP_SETTINGS = { sekolah: "Memuat...", pengumuman: "Memuat...", total_pemilih: 0, logo: "" };
+        let CANDIDATES = [];
+        let VOTERS = [];
+        let activeVoterData = null; 
+        let chartInstance = null;
+        let carouselInterval = null;
+        let dashboardUpdateInterval = null;
+        let adminToken = sessionStorage.getItem('admin_session');
+
+        async function fetchAPI(action, payload = {}) {
+            if (APP_SCRIPT_URL.includes("YOUR_SCRIPT_ID")) {
+                hideLoading();
+                showModal("Setup Backend Belum Selesai", "Aplikasi tidak bisa memuat.\n\nGanti APP_SCRIPT_URL di index.html dengan URL Web App Google Apps Script Anda.", null);
+                return new Promise(() => {}); 
+            }
+            try {
+                const response = await fetch(APP_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: action, payload: payload }) });
+                return await response.json();
+            } catch (error) { throw new Error("Gagal terhubung ke server."); }
+        }
+
+        function showLoading(text="Memproses...") { document.getElementById('loading-text').innerText = text; document.getElementById('loading-overlay').classList.remove('hidden'); }
+        function hideLoading() { setTimeout(() => { document.getElementById('loading-overlay').classList.add('hidden'); }, 300); }
+
+        function showToast(message, type = "success") {
+            const container = document.getElementById('toast-container'); const toast = document.createElement('div');
+            let bg = type === 'error' ? "bg-red-600" : (type === 'info' ? "bg-blue-600" : "bg-green-600");
+            toast.className = `${bg} text-white px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full opacity-0 font-medium text-sm`;
+            toast.innerText = message; container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.remove('translate-x-full', 'opacity-0'));
+            setTimeout(() => { toast.classList.add('opacity-0', 'translate-x-full'); setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        let confirmCallback = null;
+        function showModal(title, message, callback) {
+            document.getElementById('modal-title').innerText = title; document.getElementById('modal-message').innerText = message;
+            document.getElementById('modal-overlay').classList.remove('hidden');
+            setTimeout(() => document.getElementById('modal-content').classList.replace('scale-95', 'scale-100'), 10);
+            confirmCallback = callback;
+        }
+        function closeModal() {
+            document.getElementById('modal-content').classList.replace('scale-100', 'scale-95');
+            setTimeout(() => document.getElementById('modal-overlay').classList.add('hidden'), 200);
+        }
+        document.getElementById('modal-confirm-btn').addEventListener('click', () => { if(confirmCallback) confirmCallback(); closeModal(); });
+
+        function showFormModal(title, htmlContent) {
+            document.getElementById('form-modal-title').innerText = title; document.getElementById('form-modal-body').innerHTML = htmlContent;
+            document.getElementById('form-modal-overlay').classList.remove('hidden');
+            setTimeout(() => document.getElementById('form-modal-content').classList.replace('scale-95', 'scale-100'), 10);
+        }
+        function closeFormModal() {
+            document.getElementById('form-modal-content').classList.replace('scale-100', 'scale-95');
+            setTimeout(() => document.getElementById('form-modal-overlay').classList.add('hidden'), 200);
+        }
+
+        function toggleFullScreen() {
+            const doc = window.document; const docEl = doc.documentElement;
+            const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+            const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+            if (!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) { requestFullScreen.call(docEl).catch(err => showToast("Gagal layar penuh", "error")); } 
+            else { cancelFullScreen.call(doc); }
+        }
+
+        function switchView(viewId) {
+            document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById(viewId).classList.remove('hidden');
+            document.getElementById('landing-school-name').innerText = APP_SETTINGS.sekolah || "Portal Pemilihan";
+            if (viewId === 'view-admin-panel') initAdminPanel();
+            if (viewId === 'view-voter-cast') initVoterCast();
+            if (viewId === 'view-dashboard') initDashboard();
+            else stopDashboardLoop(); 
+        }
+
+        document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('admin-user').value; const password = document.getElementById('admin-pass').value;
+            showLoading("Memverifikasi...");
+            try {
+                const res = await fetchAPI('admin_login', { username, password });
+                hideLoading();
+                if (res.success) { sessionStorage.setItem('admin_session', res.session_token); adminToken = res.session_token; showToast("Login Berhasil"); switchView('view-admin-panel'); } 
+                else { showToast(res.message, "error"); }
+            } catch (err) { hideLoading(); showToast("Gagal terhubung ke server backend.", "error"); }
+        });
+
+        function doLogout() {
+            showModal("Konfirmasi Logout", "Keluar dari Panel Admin?", () => {
+                sessionStorage.removeItem('admin_session'); adminToken = null;
+                document.getElementById('admin-user').value = ''; document.getElementById('admin-pass').value = '';
+                switchView('view-landing'); showToast("Berhasil logout", "info");
+            });
+        }
+
+        function switchAdminTab(tabId) {
+            document.querySelectorAll('.admin-tab').forEach(t => t.classList.add('hidden')); document.getElementById(tabId).classList.remove('hidden');
+            ['kandidat','pemilih','pengaturan'].forEach(id => { document.getElementById(`btn-tab-${id}`).className = `w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg font-medium transition-colors ${tabId === 'tab-'+id ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`; });
+        }
+
+        async function fetchAdminData() {
+            showLoading("Mengambil Data...");
+            try {
+                const res = await fetchAPI('admin_get_data', { token: adminToken });
+                hideLoading();
+                if (res.success) {
+                    CANDIDATES = res.candidates || []; VOTERS = res.voters || []; APP_SETTINGS = res.settings || APP_SETTINGS;
+                    document.getElementById('setting-sekolah').value = APP_SETTINGS.sekolah || ""; document.getElementById('setting-pengumuman').value = APP_SETTINGS.pengumuman || "";
+                    document.getElementById('setting-total-pemilih').value = APP_SETTINGS.total_pemilih || 0; document.getElementById('setting-logo-url').value = APP_SETTINGS.logo || "";
+                    updateLogoUI(APP_SETTINGS.logo); renderKandidatList(); renderVotersTable();
+                }
+            } catch (err) { hideLoading(); showToast("Gagal memuat data dari server.", "error"); }
+        }
+
+        function initAdminPanel() { if(!adminToken) { showToast("Sesi habis", "error"); switchView('view-admin-login'); return; } fetchAdminData(); }
+
+        function renderKandidatList() {
+            const kGrid = document.getElementById('admin-kandidat-list'); kGrid.innerHTML = '';
+            if(CANDIDATES.length === 0) kGrid.innerHTML = `<p class="text-gray-500">Belum ada kandidat terdaftar.</p>`;
+            CANDIDATES.forEach(k => {
+                kGrid.innerHTML += `
+                    <div class="bg-white rounded-xl shadow border border-gray-100 p-4 flex gap-4">
+                        <div class="w-24 h-24 bg-gray-50 border rounded-lg overflow-hidden shrink-0 flex items-center justify-center p-1">
+                            <img src="${k.foto}" class="w-full h-full object-contain" alt="Foto">
+                        </div>
+                        <div class="flex-1 overflow-hidden flex flex-col justify-between">
+                            <div>
+                                <div class="text-sm font-bold text-blue-600 mb-1">Kandidat No. ${k.no}</div>
+                                <h4 class="text-lg font-bold text-gray-800 truncate">${k.name}</h4>
+                                <p class="text-xs text-gray-500 mt-1 line-clamp-2">${k.visi}</p>
+                            </div>
+                            <div class="mt-2 flex gap-2">
+                                <button onclick='openFormEditKandidat(${JSON.stringify(k).replace(/'/g, "&#39;")})' class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded text-gray-700 font-medium">Edit</button>
+                                <button onclick="hapusKandidat('${k.rowIndex}', '${k.name}')" class="text-xs bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded text-red-600 font-medium">Hapus</button>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function renderVotersTable(filterText = "") {
+            const tbody = document.getElementById('admin-voters-tbody'); tbody.innerHTML = '';
+            const filtered = [...VOTERS].reverse().filter(v => v.name.toLowerCase().includes(filterText.toLowerCase()) || v.token.toLowerCase().includes(filterText.toLowerCase()));
+            document.getElementById('admin-total-voters').innerText = VOTERS.length;
+            
+            filtered.forEach((v, index) => {
+                const statusBadge = v.status === 'Sudah' ? `<span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">Sudah</span>` : `<span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold">Belum</span>`;
+                const origIndex = VOTERS.length - index;
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 border-b">
+                        <td class="p-4 text-gray-600">${origIndex}</td>
+                        <td class="p-4 font-medium text-gray-800">${v.name}</td>
+                        <td class="p-4 text-center"><code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono font-bold tracking-widest">${v.token}</code></td>
+                        <td class="p-4 text-center">${statusBadge}</td>
+                        <td class="p-4 text-center flex justify-center gap-2">
+                            <button onclick="openFormEditPemilih('${v.rowIndex}', '${v.name}')" class="text-blue-500 hover:text-blue-700 text-sm font-medium">Edit</button>
+                            <button onclick="hapusPemilih('${v.rowIndex}', '${v.name}')" class="text-red-500 hover:text-red-700 text-sm font-medium">Hapus</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+        function filterVoters() { renderVotersTable(document.getElementById('search-voter').value); }
+
+        function updateLogoUI(logoUrl) {
+            document.querySelectorAll('.dynamic-logo').forEach(el => {
+                if (logoUrl) el.innerHTML = `<img src="${logoUrl}" class="w-full h-full object-contain bg-white" alt="Logo">`;
+            });
+        }
+
+        async function handleLogoUpload(input) {
+            const file = input.files[0]; if (!file) return;
+            showLoading("Mengunggah Logo...");
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = async function() {
+                    const canvas = document.createElement('canvas'); const MAX_SIZE = 400; let w = img.width, h = img.height;
+                    if (w > h && w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } else if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; }
+                    canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    const base64Str = canvas.toDataURL(file.type, 0.8).split(',')[1];
+                    try {
+                        const res = await fetchAPI('upload_file', { filename: file.name, mimeType: file.type, data: base64Str });
+                        hideLoading();
+                        if (res.success) { document.getElementById('setting-logo-url').value = res.url; showToast("Logo diunggah!"); } else { showToast("Gagal: " + res.message, "error"); }
+                    } catch(err) { hideLoading(); showToast("Koneksi bermasalah.", "error"); }
+                }; img.src = e.target.result;
+            }; reader.readAsDataURL(file);
+        }
+
+        function openFormTambahKandidat() {
+            const formHtml = `
+                <form onsubmit="submitKandidatBaru(event)" class="space-y-4">
+                    <div><label class="text-sm font-medium text-gray-700">Nomor Urut</label>
+                    <input type="number" id="f-no" required class="w-full border p-2 rounded" value="${CANDIDATES.length + 1}"></div>
+                    <div><label class="text-sm font-medium text-gray-700">Nama Paslon</label>
+                    <input type="text" id="f-nama" required class="w-full border p-2 rounded" placeholder="Contoh: Budi & Wati"></div>
+                    <div><label class="text-sm font-medium text-gray-700">Visi</label>
+                    <textarea id="f-visi" required class="w-full border p-2 rounded" rows="2"></textarea></div>
+                    <div><label class="text-sm font-medium text-gray-700">Misi (Pisahkan dengan Enter)</label>
+                    <textarea id="f-misi" required class="w-full border p-2 rounded" rows="3"></textarea></div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Upload Foto Kandidat</label>
+                        <input type="file" accept="image/png, image/jpeg" required class="w-full px-4 py-2 border rounded-lg bg-gray-50" onchange="handleFotoKandidatUpload(this, 'f-foto-status', 'f-foto-url', 'btn-simpan-kandidat')">
+                        <input type="hidden" id="f-foto-url">
+                        <p class="text-xs text-gray-500 mt-1" id="f-foto-status">Format: JPG/PNG. Otomatis dikompres.</p>
+                    </div>
+                    <button type="submit" id="btn-simpan-kandidat" class="w-full bg-blue-600 text-white font-bold py-2 rounded mt-2 disabled:bg-gray-400">Simpan Kandidat</button>
+                </form>`;
+            showFormModal("Tambah Kandidat Baru", formHtml);
+        }
+
+        async function handleFotoKandidatUpload(input, statusId, urlId, btnId) {
+            const file = input.files[0]; if (!file) return;
+            const btnSimpan = document.getElementById(btnId); const statusText = document.getElementById(statusId);
+            btnSimpan.disabled = true; statusText.innerText = "Sedang mengunggah..."; statusText.className = "text-xs text-blue-600 mt-1 font-bold animate-pulse";
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = async function() {
+                    const canvas = document.createElement('canvas'); const MAX_SIZE = 600; let w = img.width, h = img.height;
+                    if (w > h && w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } else if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; }
+                    canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    const base64Str = canvas.toDataURL(file.type, 0.8).split(',')[1];
+                    try {
+                        const res = await fetchAPI('upload_file', { filename: "Kandidat_" + file.name, mimeType: file.type, data: base64Str });
+                        if (res.success) { document.getElementById(urlId).value = res.url; statusText.innerText = "✓ Foto berhasil diunggah!"; statusText.className = "text-xs text-green-600 mt-1 font-bold"; btnSimpan.disabled = false; } 
+                        else { statusText.innerText = "X Gagal: " + res.message; statusText.className = "text-xs text-red-600 mt-1 font-bold"; }
+                    } catch(err) { statusText.innerText = "X Koneksi error"; statusText.className = "text-xs text-red-600 mt-1 font-bold"; }
+                }; img.src = e.target.result;
+            }; reader.readAsDataURL(file);
+        }
+
+        async function submitKandidatBaru(e) {
+            e.preventDefault(); const urlFoto = document.getElementById('f-foto-url').value;
+            if(!urlFoto) return showToast("Tunggu hingga indikator foto menyatakan berhasil diunggah!", "error");
+            showLoading("Menyimpan...");
+            try {
+                const res = await fetchAPI('admin_add_kandidat', { no: parseInt(document.getElementById('f-no').value), name: document.getElementById('f-nama').value, visi: document.getElementById('f-visi').value, misi: document.getElementById('f-misi').value, foto: urlFoto });
+                if(res.success) { closeFormModal(); await fetchAdminData(); showToast("Kandidat ditambahkan!"); }
+            } catch (err) { hideLoading(); showToast("Gagal menyimpan data", "error"); }
+        }
+
+        function openFormEditKandidat(k) {
+            const formHtml = `
+                <form onsubmit="submitEditKandidat(event, '${k.rowIndex}')" class="space-y-4">
+                    <div><label class="text-sm font-medium text-gray-700">Nomor Urut</label>
+                    <input type="number" id="e-no" required class="w-full border p-2 rounded" value="${k.no}"></div>
+                    <div><label class="text-sm font-medium text-gray-700">Nama Paslon</label>
+                    <input type="text" id="e-nama" required class="w-full border p-2 rounded" value="${k.name}"></div>
+                    <div><label class="text-sm font-medium text-gray-700">Visi</label>
+                    <textarea id="e-visi" required class="w-full border p-2 rounded" rows="2">${k.visi}</textarea></div>
+                    <div><label class="text-sm font-medium text-gray-700">Misi (Pisahkan dengan Enter)</label>
+                    <textarea id="e-misi" required class="w-full border p-2 rounded" rows="3">${k.misi}</textarea></div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Ganti Foto (Kosongkan jika tidak diganti)</label>
+                        <input type="file" accept="image/png, image/jpeg" class="w-full px-4 py-2 border rounded-lg bg-gray-50" onchange="handleFotoKandidatUpload(this, 'e-foto-status', 'e-foto-url', 'btn-edit-kandidat')">
+                        <input type="hidden" id="e-foto-url" value="${k.foto}">
+                        <p class="text-xs text-gray-500 mt-1" id="e-foto-status">Format: JPG/PNG.</p>
+                    </div>
+                    <button type="submit" id="btn-edit-kandidat" class="w-full bg-blue-600 text-white font-bold py-2 rounded mt-2">Update Kandidat</button>
+                </form>`;
+            showFormModal("Edit Kandidat", formHtml);
+        }
+
+        async function submitEditKandidat(e, rowIndex) {
+            e.preventDefault();
+            showLoading("Mengupdate...");
+            try {
+                const res = await fetchAPI('admin_edit_kandidat', { rowIndex: rowIndex, no: parseInt(document.getElementById('e-no').value), name: document.getElementById('e-nama').value, visi: document.getElementById('e-visi').value, misi: document.getElementById('e-misi').value, foto: document.getElementById('e-foto-url').value });
+                if(res.success) { closeFormModal(); await fetchAdminData(); showToast("Kandidat diupdate!"); }
+            } catch (err) { hideLoading(); showToast("Gagal update data", "error"); }
+        }
+
+        function hapusKandidat(rowIndex, name) {
+            showModal("Hapus Kandidat", `Yakin ingin menghapus kandidat ${name}?`, async () => {
+                showLoading("Menghapus...");
+                try {
+                    const res = await fetchAPI('admin_delete_kandidat', { rowIndex: rowIndex });
+                    if(res.success) { await fetchAdminData(); showToast("Kandidat dihapus!"); }
+                } catch (err) { hideLoading(); showToast("Gagal menghapus", "error"); }
+            });
+        }
+
+        function openFormTambahPemilih() {
+            const formHtml = `
+                <form onsubmit="submitPemilihBaru(event)" class="space-y-4">
+                    <p class="text-sm text-gray-600 mb-2">Token unik akan digenerate otomatis.</p>
+                    <div><label class="text-sm font-medium text-gray-700">Nama Pemilih</label>
+                    <input type="text" id="f-p-nama" required class="w-full border p-2 rounded outline-none" placeholder="Masukkan nama..."></div>
+                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded mt-2">Simpan Pemilih</button>
+                </form>`;
+            showFormModal("Pendaftaran Pemilih", formHtml);
+        }
+        
+        async function submitPemilihBaru(e) {
+            e.preventDefault();
+            const tokenStr = Math.floor(100000 + Math.random() * 900000).toString();
+            showLoading("Menyimpan...");
+            try {
+                const res = await fetchAPI('admin_add_pemilih', { token: tokenStr, name: document.getElementById('f-p-nama').value });
+                if (res.success) { closeFormModal(); await fetchAdminData(); showToast("Pemilih didaftarkan!", "success"); }
+            } catch(err) { hideLoading(); showToast("Gagal mendaftar", "error"); }
+        }
+
+        function openFormEditPemilih(rowIndex, currentName) {
+            const formHtml = `
+                <form onsubmit="submitEditPemilih(event, '${rowIndex}')" class="space-y-4">
+                    <div><label class="text-sm font-medium text-gray-700">Nama Pemilih</label>
+                    <input type="text" id="e-p-nama" required class="w-full border p-2 rounded" value="${currentName}"></div>
+                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded mt-2">Update Pemilih</button>
+                </form>`;
+            showFormModal("Edit Pemilih", formHtml);
+        }
+
+        async function submitEditPemilih(e, rowIndex) {
+            e.preventDefault();
+            showLoading("Mengupdate...");
+            try {
+                const res = await fetchAPI('admin_edit_pemilih', { rowIndex: rowIndex, name: document.getElementById('e-p-nama').value });
+                if (res.success) { closeFormModal(); await fetchAdminData(); showToast("Pemilih diupdate!", "success"); }
+            } catch(err) { hideLoading(); showToast("Gagal update", "error"); }
+        }
+
+        function hapusPemilih(rowIndex, name) {
+            showModal("Hapus Pemilih", `Yakin menghapus ${name}?`, async () => {
+                showLoading("Menghapus...");
+                try {
+                    const res = await fetchAPI('admin_delete_pemilih', { rowIndex: rowIndex });
+                    if(res.success) { await fetchAdminData(); showToast("Pemilih dihapus!"); }
+                } catch (err) { hideLoading(); showToast("Gagal menghapus", "error"); }
+            });
+        }
+
+        async function saveSettings() {
+            const payload = { sekolah: document.getElementById('setting-sekolah').value, pengumuman: document.getElementById('setting-pengumuman').value, total_pemilih: parseInt(document.getElementById('setting-total-pemilih').value) || 0, logo: document.getElementById('setting-logo-url').value };
+            showLoading("Menyimpan...");
+            try {
+                const res = await fetchAPI('admin_save_settings', payload);
+                hideLoading();
+                if(res.success) { showToast("Pengaturan disimpan"); updateLogoUI(payload.logo); }
+            } catch(err) { hideLoading(); showToast("Gagal menyimpan", "error"); }
+        }
+
+        function exportBeritaAcaraPDF() {
+            if(CANDIDATES.length === 0) return showToast("Data kandidat kosong", "error");
+            showLoading("Membuat PDF...");
+            setTimeout(() => {
+                const { jsPDF } = window.jspdf; const doc = new jsPDF();
+                doc.setFontSize(18); doc.text("BERITA ACARA HASIL PEMILIHAN", 105, 20, null, null, "center");
+                doc.setFontSize(12); doc.text(APP_SETTINGS.sekolah, 105, 28, null, null, "center"); doc.line(20, 32, 190, 32);
+                const totalSuara = CANDIDATES.reduce((s,c)=>s+(c.votes||0),0);
+                doc.setFontSize(11); doc.text(`Pada hari ini, telah dilaksanakan pemilihan dengan total suara masuk: ${totalSuara} suara.`, 20, 45); doc.text(`Berikut rincian perolehan suara masing-masing kandidat:`, 20, 52);
+                doc.autoTable({ head: [["No Urut", "Nama Kandidat", "Perolehan Suara"]], body: CANDIDATES.map(c => [c.no, c.name, `${c.votes} Suara`]), startY: 60, theme: 'grid' });
+                const finalY = doc.lastAutoTable.finalY + 20;
+                doc.text("Mengetahui,", 140, finalY); doc.text("Ketua Panitia Pemilihan", 140, finalY + 5); doc.text("(___________________)", 140, finalY + 30);
+                doc.save("Berita_Acara.pdf"); hideLoading(); showToast("Berita Acara diunduh");
+            }, 1000);
+        }
+
+        document.getElementById('voter-token-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const tokenInput = document.getElementById('voter-token-input').value.toUpperCase();
+            if(tokenInput.length < 6) return showToast("Token tidak valid", "error");
+
+            showLoading("Memverifikasi...");
+            try {
+                const res = await fetchAPI('voter_login', { token: tokenInput });
+                hideLoading();
+                if(res.success) {
+                    activeVoterData = res.voter; document.getElementById('voter-token-input').value = '';
+                    const dashRes = await fetchAPI('get_dashboard_data');
+                    if(dashRes.success) { CANDIDATES = dashRes.candidates; APP_SETTINGS = dashRes.settings; }
+                    switchView('view-voter-cast'); showToast(`Selamat datang, ${activeVoterData.name}`);
+                } else { showToast(res.message, "error"); }
+            } catch(err) { hideLoading(); showToast("Koneksi terputus", "error"); }
+        });
+
+        function initVoterCast() {
+            document.getElementById('cast-sekolah-name').innerText = APP_SETTINGS.sekolah || "Pemilihan";
+            document.getElementById('active-voter-name').innerText = activeVoterData.name;
+            const grid = document.getElementById('voter-candidates-grid'); grid.innerHTML = '';
+            
+            if(CANDIDATES.length === 0) { grid.innerHTML = "<p>Data kandidat belum tersedia.</p>"; return; }
+
+            CANDIDATES.forEach(k => {
+                const misiList = (k.misi || "").split('\n').map(m => `<li>${m}</li>`).join('');
+                grid.innerHTML += `
+                    <div class="bg-white rounded-2xl overflow-hidden shadow-lg border-2 border-transparent hover:border-blue-500 flex flex-col">
+                        <div class="h-56 relative bg-gray-50 flex items-center justify-center p-4 border-b border-gray-100">
+                            <div class="absolute top-2 left-2 bg-blue-600 text-white w-10 h-10 flex items-center justify-center rounded-full font-black text-xl shadow z-10">${k.no}</div>
+                            <img src="${k.foto}" class="max-w-full max-h-full object-contain drop-shadow-md hover:scale-105 transition-transform" alt="${k.name}">
+                        </div>
+                        <div class="p-5 flex-1 flex flex-col">
+                            <h3 class="text-xl font-black text-gray-800 mb-2 text-center">${k.name}</h3>
+                            <div class="mb-4 flex-1 overflow-y-auto max-h-48 pr-1">
+                                <h4 class="text-xs font-bold text-blue-600 mb-1 uppercase tracking-wider">Visi</h4>
+                                <p class="text-gray-600 text-sm mb-3 italic">"${k.visi}"</p>
+                                <h4 class="text-xs font-bold text-blue-600 mb-1 uppercase tracking-wider">Misi</h4>
+                                <ul class="text-gray-600 text-sm list-disc pl-4 space-y-1">${misiList}</ul>
+                            </div>
+                            <button onclick="castVote('${k.id || k.rowIndex}', '${k.name}')" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-lg shadow-md flex justify-center items-center gap-2">COBLOS</button>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function castVote(candidateId, candidateName) {
+            showModal("Konfirmasi Pilihan", `Anda akan memberikan suara untuk:\n\n${candidateName}\n\nPilihan yang sudah dikirim tidak dapat diubah lagi. Yakin?`, async () => {
+                showLoading("Menyimpan...");
+                try {
+                    const res = await fetchAPI('voter_cast', { candidateId: candidateId, token: activeVoterData.token, rowIndex: activeVoterData.rowIndex });
+                    hideLoading();
+                    if(res.success) {
+                        activeVoterData = null; 
+                        document.body.insertAdjacentHTML('beforeend', `
+                            <div id="success-screen" class="fixed inset-0 z-[9999] bg-green-600 flex flex-col items-center justify-center fade-in">
+                                <div class="bg-white p-6 rounded-full mb-6 shadow-2xl"><svg class="w-20 h-20 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>
+                                <h2 class="text-4xl font-bold text-white mb-2">Berhasil!</h2>
+                                <p class="text-green-100 text-xl">Suara Anda telah masuk ke kotak suara digital.</p>
+                            </div>
+                        `);
+                        setTimeout(() => { document.getElementById('success-screen').remove(); switchView('view-voter-login'); }, 2500);
+                    } else { showToast(res.message, "error"); }
+                } catch(err) { hideLoading(); showToast("Koneksi gagal", "error"); }
+            });
+        }
+
+        let currentCarouselIndex = 0;
+        async function fetchDashboardData() {
+            try {
+                const res = await fetchAPI('get_dashboard_data');
+                if(res.success) {
+                    CANDIDATES = res.candidates || []; APP_SETTINGS = res.settings || APP_SETTINGS;
+                    document.getElementById('dash-sekolah-name').innerText = APP_SETTINGS.sekolah || "Live Quick Count";
+                    document.getElementById('dash-marquee-text').innerText = APP_SETTINGS.pengumuman || "";
+                    
+                    const finalTotal = parseInt(APP_SETTINGS.total_pemilih) || 0; 
+                    const candTotal = res.voted || 0;
+                    document.getElementById('dash-voted').innerText = candTotal;
+                    document.getElementById('dash-total').innerText = finalTotal;
+                    
+                    let pct = 0; if(finalTotal > 0) pct = ((candTotal / finalTotal) * 100).toFixed(1);
+                    document.getElementById('dash-percentage').innerText = pct + '%';
+                    
+                    updateChartData();
+                    if(document.getElementById('dash-carousel-content').innerHTML.includes('Menunggu')) { currentCarouselIndex = 0; renderCarouselItem(); }
+                }
+            } catch(e) { console.log("Dashboard update failed"); }
+        }
+
+        function initDashboard() {
+            initChart(); fetchDashboardData(); 
+            clearInterval(carouselInterval);
+            carouselInterval = setInterval(() => { if(CANDIDATES.length > 0) { currentCarouselIndex = (currentCarouselIndex + 1) % CANDIDATES.length; renderCarouselItem(); } }, 12000); 
+
+            clearInterval(dashboardUpdateInterval);
+            dashboardUpdateInterval = setInterval(() => { fetchDashboardData(); }, 60000); 
+        }
+
+        function stopDashboardLoop() { clearInterval(carouselInterval); clearInterval(dashboardUpdateInterval); }
+
+        function renderCarouselItem() {
+            if(CANDIDATES.length === 0) return;
+            const container = document.getElementById('dash-carousel-content'); const progress = document.getElementById('carousel-progress');
+            const cand = CANDIDATES[currentCarouselIndex];
+            
+            container.classList.remove('fade-in'); void container.offsetWidth; container.classList.add('fade-in');
+            progress.style.transition = 'none'; progress.style.width = '0%';
+            setTimeout(() => { progress.style.transition = 'width 12s linear'; progress.style.width = '100%'; }, 50);
+
+            const misiList = (cand.misi || "").split('\n').map(m => `<li class="mb-1">${m}</li>`).join('');
+            container.innerHTML = `
+                <div class="h-48 w-full flex items-center justify-center shrink-0 mb-4 bg-gray-700 bg-opacity-30 rounded-xl p-2">
+                    <img src="${cand.foto}" class="max-h-full max-w-full object-contain drop-shadow-xl" alt="${cand.name}">
+                </div>
+                <div class="text-center shrink-0 mb-4">
+                    <span class="bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg mb-2 inline-block">Kandidat No. ${cand.no}</span>
+                    <h3 class="text-2xl font-black text-white drop-shadow-md">${cand.name}</h3>
+                </div>
+                <div class="flex-1 overflow-y-auto pr-2 pb-2 w-full">
+                    <div class="bg-gray-700 bg-opacity-50 p-4 rounded-xl border border-gray-600 text-left mb-3">
+                        <h4 class="text-xs font-bold text-purple-400 uppercase tracking-widest border-b border-gray-600 pb-1 mb-2">Visi</h4>
+                        <p class="text-gray-200 text-base italic leading-snug">"${cand.visi}"</p>
+                    </div>
+                    <div class="bg-gray-700 bg-opacity-50 p-4 rounded-xl border border-gray-600 text-left">
+                        <h4 class="text-xs font-bold text-purple-400 uppercase tracking-widest border-b border-gray-600 pb-1 mb-2">Misi</h4>
+                        <ul class="text-gray-300 text-sm list-disc pl-5">${misiList}</ul>
+                    </div>
+                </div>`;
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('voteChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+            Chart.defaults.color = '#9ca3af'; Chart.defaults.font.family = "'Inter', sans-serif";
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{ label: 'Suara', data: [], backgroundColor: ['rgba(59, 130, 246, 0.8)', 'rgba(16, 185, 129, 0.8)', 'rgba(245, 158, 11, 0.8)'], borderColor: ['rgb(59, 130, 246)', 'rgb(16, 185, 129)', 'rgb(245, 158, 11)'], borderWidth: 2, borderRadius: 8 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, grid: { color: 'rgba(75, 85, 99, 0.2)' }, ticks: { font: { size: 14, weight: 'bold' }, stepSize: 1 } }, x: { grid: { display: false }, ticks: { font: { size: 12, weight: 'bold' } } } },
+                    animation: { duration: 500 }
+                }
+            });
+        }
+        function updateChartData() {
+            if(!chartInstance || CANDIDATES.length === 0) return;
+            chartInstance.data.datasets[0].data = CANDIDATES.map(c => c.votes);
+            chartInstance.data.labels = CANDIDATES.map(c => `No. ${c.no} - ${c.name}`);
+            chartInstance.update();
+        }
+    </script>
+</body>
+</html>
